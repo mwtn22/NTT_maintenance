@@ -313,6 +313,39 @@ ORDER BY sr.org_code
             .collect())
     }
 
+    /// Area autocomplete: search by keyword or filter by pref_code.
+    pub async fn list_areas(
+        &self,
+        pref_code: Option<&str>,
+        q: Option<&str>,
+    ) -> Result<Vec<crate::models::AreaRecord>, StorageError> {
+        let mut qb: QueryBuilder<sqlx::Postgres> = QueryBuilder::new(
+            "SELECT municipality_code, pref_code, pref_name, municipality_name FROM areas WHERE 1=1 ",
+        );
+        if let Some(p) = pref_code {
+            qb.push(" AND pref_code = ").push_bind(p.to_string());
+        }
+        if let Some(keyword) = q {
+            let like = format!("%{}%", keyword);
+            qb.push(" AND (municipality_name LIKE ")
+                .push_bind(like.clone())
+                .push(" OR pref_name LIKE ")
+                .push_bind(like)
+                .push(") ");
+        }
+        qb.push(" ORDER BY pref_code, municipality_code LIMIT 50 ");
+        let rows = qb.build().fetch_all(&self.pool).await?;
+        Ok(rows
+            .iter()
+            .map(|r| crate::models::AreaRecord {
+                municipality_code: r.get("municipality_code"),
+                pref_code: r.get("pref_code"),
+                pref_name: r.get("pref_name"),
+                municipality_name: r.get("municipality_name"),
+            })
+            .collect())
+    }
+
     /// Build a GeoJSON FeatureCollection. Geometry is omitted (null) until the
     /// `areas` master is populated with PostGIS shapes; properties carry the
     /// event metadata so the map layer is already wired end-to-end.

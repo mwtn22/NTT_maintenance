@@ -8,10 +8,19 @@ use chrono::{DateTime, Utc};
 use domain::{ConnectorError, NormalizedEvent, SourceMeta};
 use sha2::{Digest, Sha256};
 
+pub mod chubu_pg;
+pub mod chugoku_epco;
+pub mod hokkaido_epco;
+pub mod hokuriku_epco;
 pub mod kansai_td;
+pub mod kyushu_epco;
 pub mod ntt_east;
 pub mod ntt_west;
+pub mod okinawa_epco;
 pub mod parse_util;
+pub mod shikoku_epco;
+pub mod tepco_pg;
+pub mod tohoku_epco;
 
 /// A fetched raw document, persisted before parsing for traceability.
 #[derive(Debug, Clone)]
@@ -103,12 +112,23 @@ pub trait Source: Send + Sync {
     fn parse(&self, raw: &RawDocument) -> Result<Vec<NormalizedEvent>, ConnectorError>;
 }
 
-/// Build the registry of connectors implemented in this iteration.
+/// Build the registry of all connectors (telecom + all 10 power operators).
 pub fn all_sources() -> Vec<Box<dyn Source>> {
     vec![
+        // Telecom
         Box::new(ntt_east::NttEast::new()),
         Box::new(ntt_west::NttWest::new()),
+        // Power — north to south
+        Box::new(hokkaido_epco::HokkaidoEpco::new()),
+        Box::new(tohoku_epco::TohokuEpco::new()),
+        Box::new(tepco_pg::TepcoPg::new()),
+        Box::new(chubu_pg::ChubuPg::new()),
+        Box::new(hokuriku_epco::HokurikuEpco::new()),
         Box::new(kansai_td::KansaiTd::new()),
+        Box::new(chugoku_epco::ChugokuEpco::new()),
+        Box::new(shikoku_epco::ShikokuEpco::new()),
+        Box::new(kyushu_epco::KyushuEpco::new()),
+        Box::new(okinawa_epco::OkinawaEpco::new()),
     ]
 }
 

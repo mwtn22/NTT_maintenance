@@ -81,6 +81,15 @@ pub struct SourceRecord {
     pub canonical_url: String,
 }
 
+/// An entry from the areas master table (autocomplete / area lookup).
+#[derive(Debug, Clone, Serialize)]
+pub struct AreaRecord {
+    pub municipality_code: String,
+    pub pref_code: String,
+    pub pref_name: String,
+    pub municipality_name: String,
+}
+
 /// Per-source freshness: distinguishes official update time from our fetch time.
 #[derive(Debug, Clone, Serialize)]
 pub struct FreshnessRecord {

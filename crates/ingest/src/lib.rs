@@ -11,7 +11,16 @@ pub fn fixture_path(org_code: &str) -> Option<PathBuf> {
     let rel = match org_code {
         "ntt-east" => "ntt_east/sample_outage.html",
         "ntt-west" => "ntt_west/sample_outage.html",
+        "hokkaido-epco" => "hokkaido_epco/sample_outage.html",
+        "tohoku-epco" => "tohoku_epco/sample_outage.html",
+        "tepco-pg" => "tepco_pg/sample_outage.html",
+        "chubu-pg" => "chubu_pg/sample_outage.html",
+        "hokuriku-epco" => "hokuriku_epco/sample_outage.html",
         "kansai-td" => "kansai_td/sample_voltage_sag.html",
+        "chugoku-epco" => "chugoku_epco/sample_outage.html",
+        "shikoku-epco" => "shikoku_epco/sample_outage.html",
+        "kyushu-epco" => "kyushu_epco/sample_outage.html",
+        "okinawa-epco" => "okinawa_epco/sample_outage.html",
         _ => return None,
     };
     Some(PathBuf::from(root).join(rel))

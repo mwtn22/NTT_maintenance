@@ -57,6 +57,7 @@ fn build_router(state: AppState) -> Router {
         .route("/api/v1/map/events.geojson", get(events_geojson))
         .route("/api/v1/sources", get(list_sources))
         .route("/api/v1/freshness", get(freshness))
+        .route("/api/v1/areas", get(list_areas_master))
         .route("/api/v1/areas/:municipality_code/events", get(area_events))
         .route("/api/v1/openapi.json", get(openapi_json))
         .layer(TraceLayer::new_for_http())
@@ -208,6 +209,23 @@ async fn area_events(
         per_page,
         total,
     }))
+}
+
+#[derive(Debug, Deserialize)]
+struct AreaQuery {
+    pref_code: Option<String>,
+    q: Option<String>,
+}
+
+async fn list_areas_master(
+    State(st): State<AppState>,
+    Query(q): Query<AreaQuery>,
+) -> Result<Response, AppError> {
+    let items = st
+        .repo
+        .list_areas(q.pref_code.as_deref(), q.q.as_deref())
+        .await?;
+    Ok(Json(serde_json::json!({ "items": items })).into_response())
 }
 
 async fn openapi_json() -> impl IntoResponse {

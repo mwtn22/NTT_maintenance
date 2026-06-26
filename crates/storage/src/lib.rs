@@ -7,7 +7,7 @@ pub mod models;
 pub mod repo;
 
 pub use models::{
-    EventFilter, EventRecord, FreshnessRecord, PrefCount, SourceRecord, SummaryRecord,
+    AreaRecord, EventFilter, EventRecord, FreshnessRecord, PrefCount, SourceRecord, SummaryRecord,
 };
 pub use repo::Repo;
 

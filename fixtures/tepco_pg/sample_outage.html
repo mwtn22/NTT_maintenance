@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head><meta charset="utf-8"><title>東京電力パワーグリッド 停電情報（サンプル）</title></head>
+<body>
+<main>
+  <h1>停電情報</h1>
+  <div class="event" data-key="tepco-20260626-tok-0001" data-kind="outage" data-status="active" data-customer="general">
+    <h3 class="title">東京都新宿区の停電</h3>
+    <p class="summary">設備故障により一部エリアで停電が発生しています。</p>
+    <p class="cause">配電設備故障</p>
+    <time class="source-updated" datetime="2026-06-26 12:00"></time>
+    <time class="started" datetime="2026-06-26 11:30"></time>
+    <time class="recovery" datetime="2026-06-26 14:00"></time>
+    <span class="impact" data-unit="戸">350</span>
+    <a class="original" href="https://teiden.tepco.co.jp/teiden/detail/0001.html">詳細</a>
+    <ul class="areas">
+      <li class="area" data-level="municipality" data-pref="13" data-muni="13104">
+        <span class="pref">東京都</span><span class="muni">新宿区</span>
+      </li>
+    </ul>
+  </div>
+  <div class="event" data-key="tepco-vs-66kv-20260625-0001" data-kind="voltage_sag" data-status="historical" data-customer="special_high_voltage">
+    <h3 class="title">瞬時電圧低下（特別高圧66kV以上）</h3>
+    <p class="summary">特別高圧受電地域向けの瞬時電圧低下履歴です。</p>
+    <p class="cause">落雷</p>
+    <time class="source-updated" datetime="2026-06-25 16:00"></time>
+    <time class="started" datetime="2026-06-25 15:20"></time>
+    <a class="original" href="https://teiden.tepco.co.jp/teiden/voltage-sag/0001.html">詳細</a>
+    <ul class="areas">
+      <li class="area" data-level="prefecture" data-pref="13">
+        <span class="pref">東京都</span>
+      </li>
+    </ul>
+  </div>
+</main>
+</body>
+</html>
