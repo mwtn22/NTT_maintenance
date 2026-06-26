@@ -15,8 +15,9 @@ NTT東日本／西日本の工事・故障情報と、各電力会社の停電�
   - 計画書の `publication_scope` / `customer_scope` / `visibility_status` を正しく設定
   - 関西電力は**一般公開の瞬時電圧低下（voltage_sag）**を含む
 - **取り込みパイプライン**（`ingest`）：fetch → raw保存(sha256) → parse → 正規化 → upsert（冪等）
-- **axum API**（`api`）：一覧/詳細/集計/GeoJSON/ソース/鮮度/OpenAPI
+- **axum API**（`api`）：一覧/詳細/集計/GeoJSON/ソース/地域/鮮度/OpenAPI
 - **鮮度の二系統表示**：公式更新時刻（`source_updated_at`）と取得時刻（`fetched_at`）を分離
+- **Webフロントエンド**：一覧 + 地図 + フィルタの三面同期（国土地理院タイル、WCAG配慮、`/` で配信）
 
 ## クレート構成
 
@@ -26,7 +27,7 @@ NTT東日本／西日本の工事・故障情報と、各電力会社の停電�
 | `storage` | sqlx リポジトリ層（PostgreSQL/PostGIS） |
 | `connectors` | `Source` trait + 各ソース実装 + scraper パーサ |
 | `ingest` | スケジューラ + 取り込みCLI |
-| `api` | axum HTTPサーバ + utoipa OpenAPI |
+| `api` | axum HTTPサーバ + utoipa OpenAPI + 埋め込みWebフロントエンド |
 
 ## セットアップと実行
 
@@ -43,9 +44,21 @@ cargo run -p ingest -- run-once            # 全ソース
 cargo run -p ingest -- run-once --source kansai-td   # 単一ソース
 cargo run -p ingest -- scheduler           # poll_interval_sec で巡回
 
-# 4. API起動
+# 4. API + Webフロントエンド起動
 cargo run -p api                           # http://localhost:8080
 ```
+
+## Webフロントエンド
+
+API サーバの `/` で配信されます（HTML/JS はバイナリに埋め込み）。
+
+- **左：地図**（Leaflet + 国土地理院 標準地図タイル、出典明示）、**右：一覧**の三面同期
+- 上部フィルタ：ソース種別 / イベント種別 / 状態 / 都道府県 / キーワード
+- 一覧行クリック → 地図マーカーへフォーカス、マーカークリック → 一覧行ハイライト
+- **バッジで公開条件を明示**：`voltage_sag` の特別高圧（TEPCO）と一般公開（関西電力）を区別
+- 鮮度は「公式更新時刻（各行）」と「当サイト取得時刻（上部）」を並記
+- アクセシビリティ：キーボード操作、`aria-live` で件数通知、色のみに依存しない状態表現
+- 地図ライブラリ読込失敗時も一覧は継続表示（縮退運転）
 
 ## 主なエンドポイント
 

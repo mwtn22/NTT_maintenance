@@ -50,6 +50,8 @@ async fn main() -> anyhow::Result<()> {
 
 fn build_router(state: AppState) -> Router {
     Router::new()
+        .route("/", get(index_html))
+        .route("/static/app.js", get(app_js))
         .route("/api/v1/health", get(health))
         .route("/api/v1/events", get(list_events))
         .route("/api/v1/events/summary", get(events_summary))
@@ -119,6 +121,21 @@ impl EventQuery {
         };
         (filter, page, per_page)
     }
+}
+
+// ── static frontend (embedded in the binary) ────────────────────────────────
+async fn index_html() -> impl IntoResponse {
+    axum::response::Html(include_str!("../static/index.html"))
+}
+
+async fn app_js() -> impl IntoResponse {
+    (
+        [(
+            axum::http::header::CONTENT_TYPE,
+            "application/javascript; charset=utf-8",
+        )],
+        include_str!("../static/app.js"),
+    )
 }
 
 // ── handlers ─────────────────────────────────────────────────────────────────

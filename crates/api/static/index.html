@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>全国版 通信工事・停電情報統合ページ</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root {
+      --fg: #1a1a1a; --bg: #ffffff; --line: #cfd6dd; --accent: #0b5fff;
+      --power: #b54708; --telecom: #175cd3;
+      --active: #b42318; --planned: #475467; --historical: #667085;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: system-ui, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+           color: var(--fg); background: var(--bg); line-height: 1.5; }
+    header { padding: .75rem 1rem; border-bottom: 2px solid var(--line); }
+    header h1 { font-size: 1.15rem; margin: 0; }
+    header p { margin: .25rem 0 0; font-size: .8rem; color: #555; }
+    .filters { display: flex; flex-wrap: wrap; gap: .5rem; align-items: end;
+               padding: .75rem 1rem; border-bottom: 1px solid var(--line); }
+    .filters .field { display: flex; flex-direction: column; gap: .15rem; }
+    .filters label { font-size: .75rem; color: #344054; }
+    .filters select, .filters input, .filters button {
+      font-size: .9rem; padding: .35rem .5rem; border: 1px solid var(--line);
+      border-radius: 6px; background: #fff; min-height: 38px; }
+    .filters button { cursor: pointer; }
+    .filters button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .filters button.primary:focus-visible, .filters button:focus-visible,
+    select:focus-visible, input:focus-visible { outline: 3px solid #ffbf47; outline-offset: 1px; }
+    main { display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+           height: calc(100vh - 168px); min-height: 420px; }
+    #map { height: 100%; border-right: 1px solid var(--line); }
+    .listpane { overflow-y: auto; padding: .5rem 1rem 2rem; }
+    .status-line { font-size: .85rem; color: #344054; padding: .25rem 0 .5rem; }
+    ul.events { list-style: none; margin: 0; padding: 0; }
+    li.event { border: 1px solid var(--line); border-radius: 8px; padding: .6rem .75rem;
+               margin-bottom: .5rem; cursor: pointer; }
+    li.event:hover, li.event:focus-visible { border-color: var(--accent); background: #f5f8ff; }
+    li.event.selected { border-color: var(--accent); box-shadow: 0 0 0 2px #cfe0ff inset; }
+    .badges { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .25rem; }
+    .badge { font-size: .72rem; padding: .1rem .45rem; border-radius: 999px;
+             border: 1px solid var(--line); white-space: nowrap; }
+    .badge.family-power { color: var(--power); border-color: var(--power); }
+    .badge.family-telecom { color: var(--telecom); border-color: var(--telecom); }
+    .badge.kind { background: #f2f4f7; }
+    .badge.status-active { color: #fff; background: var(--active); border-color: var(--active); }
+    .badge.status-planned { color: #fff; background: var(--planned); border-color: var(--planned); }
+    .badge.status-historical { color: #fff; background: var(--historical); border-color: var(--historical); }
+    .badge.scope { background: #fff7ed; color: #9a3412; border-color: #fdba74; }
+    .ev-title { font-weight: 600; font-size: .95rem; }
+    .ev-meta { font-size: .8rem; color: #475467; margin-top: .15rem; }
+    .ev-meta a { color: var(--accent); }
+    .ev-times { font-size: .76rem; color: #667085; margin-top: .15rem; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden;
+                       clip: rect(0 0 0 0); white-space: nowrap; }
+    @media (max-width: 760px) { main { grid-template-columns: 1fr; height: auto; }
+      #map { height: 320px; border-right: none; border-bottom: 1px solid var(--line); } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>全国版 通信工事・停電情報統合ページ</h1>
+    <p>NTT東日本／西日本の工事・故障情報と、全国10エリアの電力会社の停電・瞬時電圧低下情報を横断表示します。
+       公開条件・更新粒度・地域粒度の違いはバッジで明示します。</p>
+  </header>
+
+  <form class="filters" id="filters" aria-label="絞り込み条件">
+    <div class="field">
+      <label for="f-family">ソース種別</label>
+      <select id="f-family" name="family">
+        <option value="">すべて</option>
+        <option value="telecom">通信（NTT）</option>
+        <option value="power">電力</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-kind">イベント種別</label>
+      <select id="f-kind" name="event_kind">
+        <option value="">すべて</option>
+        <option value="construction">工事</option>
+        <option value="maintenance">メンテナンス</option>
+        <option value="fault">故障</option>
+        <option value="outage">停電</option>
+        <option value="voltage_sag">瞬時電圧低下</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-status">状態</label>
+      <select id="f-status" name="status">
+        <option value="">すべて</option>
+        <option value="planned">予定</option>
+        <option value="active">発生中</option>
+        <option value="resolved">復旧</option>
+        <option value="historical">履歴</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="f-pref">都道府県</label>
+      <select id="f-pref" name="pref_code"><option value="">全国</option></select>
+    </div>
+    <div class="field">
+      <label for="f-q">キーワード</label>
+      <input type="search" id="f-q" name="q" placeholder="例: 落雷 / 工事">
+    </div>
+    <div class="field">
+      <button type="submit" class="primary">検索</button>
+    </div>
+    <div class="field">
+      <button type="reset" id="clear">条件をクリア</button>
+    </div>
+  </form>
+
+  <main>
+    <div id="map" role="application" aria-label="停電・工事情報の地図"></div>
+    <section class="listpane" aria-label="イベント一覧">
+      <div class="status-line" id="status" role="status" aria-live="polite">読み込み中…</div>
+      <ul class="events" id="events"></ul>
+    </section>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
