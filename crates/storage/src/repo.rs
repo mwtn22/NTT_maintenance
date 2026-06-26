@@ -346,17 +346,57 @@ ORDER BY sr.org_code
             .collect())
     }
 
-    /// Build a GeoJSON FeatureCollection. Geometry is omitted (null) until the
-    /// `areas` master is populated with PostGIS shapes; properties carry the
-    /// event metadata so the map layer is already wired end-to-end.
+    /// Build a GeoJSON FeatureCollection.
+    /// Geometry: Point from `areas.centroid` (approximate municipality centroid seeded in
+    /// migration 0003) when available; null for areas not yet in the master table.
+    /// Real MultiPolygon geometry will replace this once KSJ N03 shapes are loaded.
     pub async fn events_geojson(&self, f: &EventFilter) -> Result<serde_json::Value, StorageError> {
         let records = self.list_events(f).await?;
+
+        // Collect event IDs to fetch centroids in one query.
+        let ids: Vec<Uuid> = records.iter().map(|r| r.event_id).collect();
+
+        // For each event, pick the first municipality that has a centroid seeded.
+        let centroid_rows = if ids.is_empty() {
+            vec![]
+        } else {
+            sqlx::query(
+                r#"
+SELECT DISTINCT ON (ea.event_id)
+    ea.event_id,
+    ST_AsGeoJSON(a.centroid)::text AS geom_json
+FROM event_areas ea
+JOIN areas a ON a.municipality_code = ea.municipality_code
+WHERE ea.event_id = ANY($1)
+  AND a.centroid IS NOT NULL
+ORDER BY ea.event_id, ea.municipality_code
+"#,
+            )
+            .bind(&ids)
+            .fetch_all(&self.pool)
+            .await?
+        };
+
+        let mut centroid_map: std::collections::HashMap<Uuid, serde_json::Value> =
+            std::collections::HashMap::new();
+        for row in &centroid_rows {
+            let event_id: Uuid = row.get("event_id");
+            let geom_str: String = row.get("geom_json");
+            if let Ok(v) = serde_json::from_str::<serde_json::Value>(&geom_str) {
+                centroid_map.insert(event_id, v);
+            }
+        }
+
         let features: Vec<serde_json::Value> = records
             .iter()
             .map(|e| {
+                let geom = centroid_map
+                    .get(&e.event_id)
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
                 serde_json::json!({
                     "type": "Feature",
-                    "geometry": serde_json::Value::Null,
+                    "geometry": geom,
                     "properties": {
                         "event_id": e.event_id,
                         "family": e.family,
@@ -373,6 +413,50 @@ ORDER BY sr.org_code
             "type": "FeatureCollection",
             "features": features,
         }))
+    }
+
+    /// Record a successful ingest cycle: resets consecutive_failures counter.
+    pub async fn record_ingest_success(&self, source_id: Uuid) -> Result<(), StorageError> {
+        sqlx::query(
+            "UPDATE source_registry SET consecutive_failures = 0 WHERE source_id = $1",
+        )
+        .bind(source_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Record a failed ingest cycle: increments counter and stores the error message.
+    pub async fn record_ingest_failure(
+        &self,
+        source_id: Uuid,
+        error: &str,
+    ) -> Result<(), StorageError> {
+        sqlx::query(
+            r#"
+UPDATE source_registry SET
+    consecutive_failures = consecutive_failures + 1,
+    last_failure_at      = NOW(),
+    last_failure_text    = $2
+WHERE source_id = $1
+"#,
+        )
+        .bind(source_id)
+        .bind(error)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Return the current consecutive_failures count for a source.
+    pub async fn get_consecutive_failures(&self, source_id: Uuid) -> Result<i32, StorageError> {
+        let row = sqlx::query(
+            "SELECT consecutive_failures FROM source_registry WHERE source_id = $1",
+        )
+        .bind(source_id)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(row.get("consecutive_failures"))
     }
 }
 

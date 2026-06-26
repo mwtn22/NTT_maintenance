@@ -59,18 +59,39 @@ fn arg_value(args: &[String], flag: &str) -> Option<String> {
         .cloned()
 }
 
-/// Minimal per-source polling loop. Each source is polled on its own interval.
+/// Per-source polling loop with exponential backoff on consecutive failures.
+/// Each source runs independently; a broken source does not block others.
 async fn run_scheduler(repo: Repo) -> anyhow::Result<()> {
     let mut handles = Vec::new();
     for source in connectors::all_sources() {
         let repo = repo.clone();
-        let interval = source.meta().poll_interval_sec.max(60) as u64;
+        let base_interval = source.meta().poll_interval_sec.max(60) as u64;
         handles.push(tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(Duration::from_secs(interval));
             loop {
-                ticker.tick().await;
+                // Read current failure count to determine wait before next attempt.
+                let failures = match repo.upsert_source(&source.meta()).await {
+                    Ok(id) => repo
+                        .get_consecutive_failures(id)
+                        .await
+                        .unwrap_or(0),
+                    Err(_) => 0,
+                };
+                let wait = ingest::backoff_interval_secs(base_interval, failures);
+                if failures > 0 {
+                    tracing::warn!(
+                        org_code = %source.meta().org_code,
+                        consecutive_failures = failures,
+                        wait_secs = wait,
+                        "backing off due to repeated failures"
+                    );
+                }
+                tokio::time::sleep(Duration::from_secs(wait)).await;
                 if let Err(e) = ingest::run_source(&repo, source.as_ref()).await {
-                    tracing::error!(error = %e, "scheduled ingest failed");
+                    tracing::error!(
+                        org_code = %source.meta().org_code,
+                        error = %e,
+                        "scheduled ingest failed"
+                    );
                 }
             }
         }));
